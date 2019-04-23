@@ -6,11 +6,13 @@ import Control.Concurrent
 import Control.Monad
 import Control.Monad.IO.Class
 import Data.Text.Encoding (encodeUtf8)
+import Data.Text (unpack)
 import Network.Socket (withSocketsDo)
 import Network.HTTP.Client hiding (Proxy)
 import Network.HTTP.Client.MultipartFormData
 import Network.Wai
 import Network.Wai.Handler.Warp
+import Network.Wai.Middleware.Cors
 import Servant
 import Servant.Multipart
 import System.Environment (getArgs)
@@ -42,30 +44,15 @@ upload multipartData = do
 
     forM_ (files multipartData) $ \file -> do
       let content = fdPayload file
-      putStrLn $ "Content of " ++ show (fdFileName file)
-      LBS.putStr content
+      putStrLn $ "Writing file " ++ show (fdFileName file)
+      LBS.writeFile
+        ("/srv/http/files" ++ "/" ++ unpack (fdFileName file)) content
   return 0
 
 startServer :: IO ()
-startServer = run 8080 (serve api upload)
+startServer = run 8082 $ simpleCors (serve api upload)
 
 main :: IO ()
 main = do
-  args <- getArgs
-  case args of
-    ("run":_) -> withSocketsDo $ do
-      forkIO startServer
-      -- we fork the server in a separate thread and send a test
-      -- request to it from the main thread.
-      manager <- newManager defaultManagerSettings
-      req <- parseRequest "http://localhost:8080/"
-      resp <- flip httpLbs manager =<< formDataBody form req
-      print resp
-    _ -> putStrLn "Pass run to run"
-
-  where form =
-          [ partBS "title" "World"
-          , partBS "text" $ encodeUtf8 "Hello"
-          , partFileSource "file" "./servant-multipart.cabal"
-          , partFileSource "otherfile" "./Setup.hs"
-          ]
+  putStrLn "starting server"
+  withSocketsDo startServer

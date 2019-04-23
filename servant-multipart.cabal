@@ -61,6 +61,7 @@ test-suite upload
     , text
     , transformers
     , wai
+    , wai-cors
     , warp
 
 source-repository head
